@@ -5,9 +5,10 @@ using TheAdventure.Models.Data;
 
 namespace TheAdventure;
 
-public class GameLogic
+public class Engine
 {
     private readonly GameRenderer _renderer;
+    private readonly Input _input;
 
     private readonly Dictionary<int, GameObject> _gameObjects = new();
     private readonly Dictionary<string, TileSet> _loadedTileSets = new();
@@ -16,15 +17,17 @@ public class GameLogic
     private Level _currentLevel = new();
     private PlayerObject? _player;
 
-    private int _bombIds = 100;
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
 
-    public GameLogic(GameRenderer renderer)
+    public Engine(GameRenderer renderer, Input input)
     {
         _renderer = renderer;
+        _input = input;
+
+        _input.OnMouseClick += (_, coords) => AddBomb(coords.x, coords.y);
     }
 
-    public void InitializeGame()
+    public void SetupWorld()
     {
         _player = new(_renderer);
 
@@ -71,61 +74,49 @@ public class GameLogic
 
     public void ProcessFrame()
     {
-    }
-    
-    public void RenderFrame()
-    {
         var currentTime = DateTimeOffset.Now;
         var msSinceLastFrame = (currentTime - _lastUpdate).TotalMilliseconds;
         _lastUpdate = currentTime;
-        
+
+        double up = _input.IsUpPressed() ? 1.0 : 0.0;
+        double down = _input.IsDownPressed() ? 1.0 : 0.0;
+        double left = _input.IsLeftPressed() ? 1.0 : 0.0;
+        double right = _input.IsRightPressed() ? 1.0 : 0.0;
+
+        _player?.UpdatePosition(up, down, left, right, (int)msSinceLastFrame);
+    }
+
+    public void RenderFrame()
+    {
         _renderer.SetDrawColor(0, 0, 0, 255);
         _renderer.ClearScreen();
-        
+
         _renderer.CameraLookAt(_player!.X, _player!.Y);
-        
+
         RenderTerrain();
-        RenderAllObjects(msSinceLastFrame);
-            
+        RenderAllObjects();
+
         _renderer.PresentFrame();
     }
 
-    public void RenderAllObjects(double msSinceLastFrame)
+    public void RenderAllObjects()
     {
-        List<int> itemsToRemove = new List<int>();
+        var toRemove = new List<int>();
         foreach (var gameObject in GetRenderables())
         {
-            if (gameObject.Update(msSinceLastFrame))
+            gameObject.Render(_renderer);
+            if (gameObject is TemporaryGameObject { IsExpired: true } tempGameObject)
             {
-                gameObject.Render(_renderer);
-            }
-            else
-            {
-                itemsToRemove.Add(gameObject.Id);
+                toRemove.Add(tempGameObject.Id);
             }
         }
 
-        foreach (var item in itemsToRemove)
+        foreach (var id in toRemove)
         {
-            _gameObjects.Remove(item);
+            _gameObjects.Remove(id);
         }
 
         _player?.Render(_renderer);
-    }
-
-    public void UpdatePlayerPosition(double up, double down, double left, double right, int timeSinceLastUpdateInMs)
-    {
-        _player?.UpdatePosition(up, down, left, right, timeSinceLastUpdateInMs);
-    }
-
-    public void AddBomb(int screenX, int screenY)
-    {
-        var worldCoords = _renderer.ToWorldCoordinates(screenX, screenY);
-        AnimatedGameObject bomb =
-            new AnimatedGameObject(Path.Combine("Assets", "BombExploding.png"), _renderer, 2, 13, 13, 1,
-                worldCoords.X, worldCoords.Y);
-        _gameObjects.Add(bomb.Id, bomb);
-        ++_bombIds;
     }
 
     public void RenderTerrain()
@@ -170,5 +161,23 @@ public class GameLogic
                 yield return renderableGameObject;
             }
         }
+    }
+
+    private void AddBomb(int screenX, int screenY)
+    {
+        var worldCoords = _renderer.ToWorldCoordinates(screenX, screenY);
+
+        SpriteSheet spriteSheet = new(_renderer, Path.Combine("Assets", "BombExploding.png"), 1, 13, 32, 64, (16, 48));
+        spriteSheet.Animations["Explode"] = new SpriteSheet.Animation
+        {
+            StartFrame = (0, 0),
+            EndFrame = (0, 12),
+            DurationMs = 2000,
+            Loop = false
+        };
+        spriteSheet.ActivateAnimation("Explode");
+
+        TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
+        _gameObjects.Add(bomb.Id, bomb);
     }
 }
