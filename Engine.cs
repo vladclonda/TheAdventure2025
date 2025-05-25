@@ -32,7 +32,7 @@ public class Engine
 
     public void SetupWorld()
     {
-        _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
+        _player = new PlayerObject(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100, maxHp: 100);
 
         var levelContent = File.ReadAllText(Path.Combine("Assets", "terrain.tmj"));
         var level = JsonSerializer.Deserialize<Level>(levelContent);
@@ -100,7 +100,7 @@ public class Engine
         {
             _player.Attack();
         }
-        
+
         _scriptEngine.ExecuteAll(this);
 
         if (addBomb)
@@ -119,6 +119,7 @@ public class Engine
 
         RenderTerrain();
         RenderAllObjects();
+        RenderHud(); 
 
         _renderer.PresentFrame();
     }
@@ -149,7 +150,7 @@ public class Engine
             var deltaY = Math.Abs(_player.Position.Y - tempGameObject.Position.Y);
             if (deltaX < 32 && deltaY < 32)
             {
-                _player.GameOver();
+                _player.TakeDamage(25); // Deal damage instead of instant death
             }
         }
 
@@ -214,5 +215,23 @@ public class Engine
 
         TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
         _gameObjects.Add(bomb.Id, bomb);
+    }
+    
+    private void RenderHud()
+    {
+        if (_player == null) return;
+
+        const int barWidth = 200;
+        const int barHeight = 20;
+        const int x = 20;
+        const int y = 20;
+
+        // Background
+        _renderer.FillRectangle(new Rectangle<int>(x, y, barWidth, barHeight), 255, 0, 0, 128);
+        
+        // Current health
+        float healthPercent = (float)_player.CurrentHp / _player.MaxHp;
+        int currentWidth = (int)(barWidth * healthPercent);
+        _renderer.FillRectangle(new Rectangle<int>(x, y, currentWidth, barHeight), 0, 255, 0, 255);
     }
 }

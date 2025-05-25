@@ -3,8 +3,13 @@ using Silk.NET.Maths;
 namespace TheAdventure.Models;
 
 public class PlayerObject : RenderableGameObject
-{
-    private const int _speed = 128; // pixels per second
+{   
+    private const int _speed = 128; 
+    private int _currentHp;
+    private int _maxHp;
+
+    public int CurrentHp => _currentHp;
+    public int MaxHp => _maxHp;
 
     public enum PlayerStateDirection
     {
@@ -26,8 +31,10 @@ public class PlayerObject : RenderableGameObject
 
     public (PlayerState State, PlayerStateDirection Direction) State { get; private set; }
 
-    public PlayerObject(SpriteSheet spriteSheet, int x, int y) : base(spriteSheet, (x, y))
+    public PlayerObject(SpriteSheet spriteSheet, int x, int y, int maxHp = 100) : base(spriteSheet, (x, y))
     {
+        _maxHp = maxHp;
+        _currentHp = _maxHp;
         SetState(PlayerState.Idle, PlayerStateDirection.Down);
     }
 
@@ -81,7 +88,27 @@ public class PlayerObject : RenderableGameObject
         var direction = State.Direction;
         SetState(PlayerState.Attack, direction);
     }
+    
+    public void TakeDamage(int damage)
+    {
+        if (State.State == PlayerState.GameOver || _currentHp <= 0)
+            return;
 
+        _currentHp = Math.Max(_currentHp - damage, 0);
+        
+        if (_currentHp <= 0)
+        {
+            GameOver();
+        }
+    }
+
+        public void Heal(int amount)
+    {
+        if (State.State == PlayerState.GameOver || _currentHp >= _maxHp)
+            return;
+
+        _currentHp = Math.Min(_currentHp + amount, _maxHp);
+    }
     public void UpdatePosition(double up, double down, double left, double right, int width, int height, double time)
     {
         if (State.State == PlayerState.GameOver)
@@ -117,7 +144,7 @@ public class PlayerObject : RenderableGameObject
         else
         {
             newState = PlayerState.Move;
-            
+
             if (y < Position.Y && newDirection != PlayerStateDirection.Up)
             {
                 newDirection = PlayerStateDirection.Up;
