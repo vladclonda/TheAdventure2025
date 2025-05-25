@@ -4,11 +4,14 @@ using Silk.NET.Maths;
 using TheAdventure.Models;
 using TheAdventure.Models.Data;
 using TheAdventure.Scripting;
+using System.Linq;
 
 namespace TheAdventure;
 
 public class Engine
 {
+
+    private List<Enemy> _enemies = new();
     private readonly GameRenderer _renderer;
     private readonly Input _input;
     private readonly ScriptEngine _scriptEngine = new();
@@ -21,6 +24,9 @@ public class Engine
     private PlayerObject? _player;
 
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
+
+    private double _spawnTimer;
+    private const double SpawnInterval = 5.0; 
 
     public Engine(GameRenderer renderer, Input input)
     {
@@ -77,6 +83,39 @@ public class Engine
         _scriptEngine.LoadAll(Path.Combine("Assets", "Scripts"));
     }
 
+    private void SpawnEnemies(int count)
+    {
+        var random = new Random();
+        for (int i = 0; i < count; i++)
+        {
+            var position = GetValidSpawnPosition(random);
+            var enemySheet = SpriteSheet.Load(_renderer, "Enemy.json", "Assets");
+            _enemies.Add(new Enemy(enemySheet, position));
+        }
+    }
+    
+    private (int X, int Y) GetValidSpawnPosition(Random random)
+    {
+        const int minDistance = 200;
+        var pos = (X: 0, Y: 0);
+        
+        if (_player == null) return pos;
+
+        double distance;
+        do 
+        {
+            pos = (X: random.Next(100, 700), Y: random.Next(100, 500));
+            var playerPos = new Vector2D<int>(_player.Position.X, _player.Position.Y);
+            var enemyPos = new Vector2D<int>(pos.X, pos.Y);
+            var dx = playerPos.X - enemyPos.X;
+            var dy = playerPos.Y - enemyPos.Y;
+            distance = Math.Sqrt(dx * dx + dy * dy);
+        } 
+        while (distance < minDistance);
+
+        return pos;
+    }
+
     public void ProcessFrame()
     {
         var currentTime = DateTimeOffset.Now;
@@ -95,18 +134,32 @@ public class Engine
         bool isAttacking = _input.IsKeyAPressed() && (up + down + left + right <= 1);
         bool addBomb = _input.IsKeyBPressed();
 
+        _spawnTimer -= msSinceLastFrame / 1000.0;
+
         _player.UpdatePosition(up, down, left, right, 48, 48, msSinceLastFrame);
         if (isAttacking)
         {
             _player.Attack();
         }
 
+        if (_spawnTimer <= 0)
+        {
+            SpawnEnemies(1); // Spawn 1 enemy at a time
+            _spawnTimer = SpawnInterval;
+        }
+
+        foreach (var enemy in _enemies)
+        {
+            enemy.Update(_player, msSinceLastFrame);
+        }
         _scriptEngine.ExecuteAll(this);
 
         if (addBomb)
         {
             AddBomb(_player.Position.X, _player.Position.Y, false);
         }
+
+        _enemies = _enemies.Where(e => !e.ShouldRemove).ToList();
     }
 
     public void RenderFrame()
@@ -119,7 +172,7 @@ public class Engine
 
         RenderTerrain();
         RenderAllObjects();
-        RenderHud(); 
+        RenderHud();
 
         _renderer.PresentFrame();
     }
@@ -152,6 +205,11 @@ public class Engine
             {
                 _player.TakeDamage(25); // Deal damage instead of instant death
             }
+        }
+
+        foreach (var enemy in _enemies)
+        {
+            enemy.Render(_renderer);
         }
 
         _player?.Render(_renderer);
@@ -216,7 +274,7 @@ public class Engine
         TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
         _gameObjects.Add(bomb.Id, bomb);
     }
-    
+
     private void RenderHud()
     {
         if (_player == null) return;
@@ -228,7 +286,7 @@ public class Engine
 
         // Background
         _renderer.FillRectangle(new Rectangle<int>(x, y, barWidth, barHeight), 255, 0, 0, 128);
-        
+
         // Current health
         float healthPercent = (float)_player.CurrentHp / _player.MaxHp;
         int currentWidth = (int)(barWidth * healthPercent);

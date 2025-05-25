@@ -96,6 +96,15 @@ public class PlayerObject : RenderableGameObject
 
         _currentHp = Math.Max(_currentHp - damage, 0);
         
+        if (_currentHp > 0)
+        {
+            SetState(PlayerState.Attack, State.Direction);
+            Task.Delay(300).ContinueWith(_ => 
+            {
+                SetState(PlayerState.Idle, State.Direction);
+            });
+        }
+
         if (_currentHp <= 0)
         {
             GameOver();

@@ -1,0 +1,17 @@
+{
+  "FileName": "Enemy.png",
+  "FrameWidth": 64,
+  "FrameHeight": 64,
+  "RowCount": 1,
+  "ColumnCount": 3,
+  "Animations": {
+    "Walk": {
+      "Frames": [
+        { "Row": 0, "Column": 0, "Duration": 0.1 },
+        { "Row": 0, "Column": 1, "Duration": 0.1 },
+        { "Row": 0, "Column": 2, "Duration": 0.1 }
+      ],
+      "Loop": true
+    }
+  }
+}

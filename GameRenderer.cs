@@ -9,8 +9,6 @@ namespace TheAdventure;
 
 public unsafe class GameRenderer
 {
-
-
     public struct SDL_Rect
     {
         public int x; // lowercase
